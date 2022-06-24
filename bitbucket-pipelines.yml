@@ -1,0 +1,40 @@
+image: triumphtech/triumph-terraform-pipelines:latest
+
+definitions:
+  steps:
+    - step: &secrets-scan # https://bitbucket.org/product/features/pipelines/integrations?p=atlassian/git-secrets-scan
+        name: secrets-scan
+        script:
+          - pipe: atlassian/git-secrets-scan:0.5.1
+    - step: &tf-test
+        name: tflint-tfsec
+        script:
+          - tflint .
+          - tfsec .    
+    - step: &tf-plan
+        name: tf-plan
+        script:
+          - terraform init -input=false -backend-config="${ENV}_backend_config.tfvars"
+          - terraform validate
+          - terraform plan -input=false -var-file="${ENV}.tfvars"
+    - step: &tf-apply
+        name: tf-apply
+        trigger: manual
+        script:
+          - terraform init -input=false -backend-config="${ENV}_backend_config.tfvars"
+          - terraform validate
+          - terraform apply -input=false -auto-approve -var-file="${ENV}.tfvars"
+
+pipelines:
+  default:
+    - parallel:
+        - step: *secrets-scan
+        - step: *tf-test
+    - step: *tf-plan
+        
+  branches:
+    main:
+    - parallel:
+        - step: *secrets-scan
+        - step: *tf-test
+    - step: *tf-apply
